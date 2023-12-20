@@ -1,6 +1,89 @@
 import asyncio
 from playwright.async_api import async_playwright
+from playwright.sync_api import sync_playwright
 
+def search_termium(query):
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        context = browser.new_context()
+        page = context.new_page()
+
+        page.goto("https://www.btb.termiumplus.gc.ca/tpv2alpha/alpha-fra.html?lang=fra")
+        
+        # Type the query into the search input field
+        page.type("#searchfield", query)
+
+        # Click the search button
+        page.click("#comencsrch")
+        page.wait_for_selector('section.recordSet')
+
+        # Extract information from each search result or return an empty array if no results are found
+        results = page.evaluate('''() => {
+            
+            const resultItems = document.querySelectorAll('.panel-body.mrgn-bttm-sm.mrgn-tp-sm');
+
+            const resultData = [];
+
+            resultItems.forEach((item) => {
+                const entry = {
+                    english:{
+                        subject:"",
+                        term:"",
+                        context:""
+                    },
+                    francais:{
+                        domaine:"",
+                        terme:"",
+                        contexte:""
+                    }
+                };
+
+                // Extract English, French, and Spanish records
+                const records = item.querySelectorAll('.col-md-4');
+                records.forEach((record, index) => {
+                    try{
+                        if(index == 0){
+                            //English Record
+                            const subjectFieldElements = record.querySelector('.panel-body ul li');
+                            entry.english.subject = subjectFieldElements.innerText
+            
+                            const keyTermsElements = record.querySelectorAll(`.list-unstyled .text-primary`);
+                            const secondaryTermsElement = record.querySelector(`.list-unstyled .text-primary mark`);
+                            
+                            keyTermsElements.forEach(el =>{
+                                entry.english.term +=  el.innerText +"\n\n"
+                            })
+            
+                            const context = record.querySelector('.panel-body div.wb-init p')
+                            entry.english.context = context.innerText
+                            
+                        } else if(index == 1){
+                            //English Record
+                            const subjectFieldElements = record.querySelector('.panel-body ul li');
+                            entry.francais.domaine = subjectFieldElements.innerText
+            
+                            const keyTermsElements = record.querySelectorAll(`.list-unstyled .text-primary`);
+
+                            keyTermsElements.forEach(el =>{
+                                entry.francais.terme += el.innerText + "\n\n"
+                            })
+                                            
+                            const context = record.querySelector('.panel-body div.wb-init p')
+                            entry.francais.contexte = context.innerText
+                        } 
+                    }catch(e){
+                        console.log(e)
+                    }
+
+                });
+                resultData.push(entry);
+            })
+            return resultData
+        }''')
+
+        # Close the browser
+        browser.close()
+        return results
 
 async def search_termium(query):
     async with async_playwright() as p:
